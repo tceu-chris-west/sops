@@ -9,6 +9,7 @@ import (
 	"go.mozilla.org/sops/v3/hcvault"
 	"go.mozilla.org/sops/v3/kms"
 	"go.mozilla.org/sops/v3/pgp"
+	"go.mozilla.org/sops/v3/yandexkms"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -61,6 +62,17 @@ func (ks *Server) encryptWithAzureKeyVault(key *AzureKeyVaultKey, plaintext []by
 		return nil, err
 	}
 	return []byte(azkvKey.EncryptedKey), nil
+}
+
+func (ks *Server) encryptWithYandexKms(key *YandexKmsKey, plaintext []byte) ([]byte, error) {
+	yandexKmsKey := yandexkms.MasterKey{
+		KeyId: key.KeyId,
+	}
+	err := yandexKmsKey.Encrypt(plaintext)
+	if err != nil {
+		return nil, err
+	}
+	return []byte(yandexKmsKey.EncryptedKey), nil
 }
 
 func (ks *Server) encryptWithVault(key *VaultKey, plaintext []byte) ([]byte, error) {
@@ -119,6 +131,15 @@ func (ks *Server) decryptWithAzureKeyVault(key *AzureKeyVaultKey, ciphertext []b
 	}
 	azkvKey.EncryptedKey = string(ciphertext)
 	plaintext, err := azkvKey.Decrypt()
+	return []byte(plaintext), err
+}
+
+func (ks *Server) decryptWithYandexKms(key *YandexKmsKey, ciphertext []byte) ([]byte, error) {
+	yandexKmsKey := yandexkms.MasterKey{
+		KeyId: key.KeyId,
+	}
+	yandexKmsKey.EncryptedKey = string(ciphertext)
+	plaintext, err := yandexKmsKey.Decrypt()
 	return []byte(plaintext), err
 }
 
@@ -181,6 +202,14 @@ func (ks Server) Encrypt(ctx context.Context,
 		response = &EncryptResponse{
 			Ciphertext: ciphertext,
 		}
+	case *Key_YandexKmsKey:
+		ciphertext, err := ks.encryptWithYandexKms(k.YandexKmsKey, req.Plaintext)
+		if err != nil {
+			return nil, err
+		}
+		response = &EncryptResponse{
+			Ciphertext: ciphertext,
+		}
 	case *Key_VaultKey:
 		ciphertext, err := ks.encryptWithVault(k.VaultKey, req.Plaintext)
 		if err != nil {
@@ -221,6 +250,8 @@ func keyToString(key Key) string {
 		return fmt.Sprintf("GCP KMS key with resource ID %s", k.GcpKmsKey.ResourceId)
 	case *Key_AzureKeyvaultKey:
 		return fmt.Sprintf("Azure Key Vault key with URL %s/keys/%s/%s", k.AzureKeyvaultKey.VaultUrl, k.AzureKeyvaultKey.Name, k.AzureKeyvaultKey.Version)
+	case *Key_YandexKmsKey:
+		return fmt.Sprintf("Yandex KMS key with key ID %s", k.YandexKmsKey.KeyId)
 	case *Key_VaultKey:
 		return fmt.Sprintf("Hashicorp Vault key with URI %s/v1/%s/keys/%s", k.VaultKey.VaultAddress, k.VaultKey.EnginePath, k.VaultKey.KeyName)
 	default:

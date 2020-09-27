@@ -48,11 +48,13 @@ creation_rules:
     kms: "1"
     pgp: "2"
     gcp_kms: "3"
+    yandex_kms: "5"
     hc_vault_transit_uri: http://4:8200/v1/4/keys/4
   - path_regex: ""
     kms: foo
     pgp: bar
     gcp_kms: baz
+    yandex_kms: qux
     hc_vault_transit_uri: http://127.0.1.1/v1/baz/keys/baz
 `)
 
@@ -62,16 +64,19 @@ creation_rules:
     kms: "1"
     pgp: "2"
     gcp_kms: "3"
+    yandex_kms: "5"
     hc_vault_uris: http://4:8200/v1/4/keys/4
   - path_regex: somefilename.yml
     kms: bilbo
     pgp: baggins
     gcp_kms: precious
+    yandex_kms: bombadil
     hc_vault_uris: https://pluto/v1/pluto/keys/pluto
   - path_regex: ""
     kms: foo
     pgp: bar
     gcp_kms: baz
+    yandex_kms: qux
     hc_vault_uris: https://foz:443/v1/foz/keys/foz
 `)
 
@@ -92,6 +97,8 @@ creation_rules:
       - vaultUrl: https://foo.vault.azure.net
         key: foo-key
         version: fooversion
+      yandex_kms:
+      - key_id: foo
       hc_vault:
       - 'https://foo.vault:8200/v1/foo/keys/foo-key'
     - kms:
@@ -105,6 +112,9 @@ creation_rules:
       - vaultUrl: https://bar.vault.azure.net
         key: bar-key
         version: barversion
+      yandex_kms:
+      - key_id: bar
+      - key_id: baz
       hc_vault:
       - 'https://baz.vault:8200/v1/baz/keys/baz-key'
 `)
@@ -125,6 +135,9 @@ creation_rules:
         gcp_kms:
           - resource_id: bar
           - resource_id: baz
+        yandex_kms:
+          - key_id: bar
+          - key_id: baz
         azure_keyvault:
         - vaultUrl: https://foo.vault.azure.net
           key: foo-key
@@ -224,6 +237,7 @@ func TestLoadConfigFile(t *testing.T) {
 				PGP:       "2",
 				GCPKMS:    "3",
 				VaultURI:  "http://4:8200/v1/4/keys/4",
+				YandexKMS: "5",
 			},
 			{
 				PathRegex: "",
@@ -231,6 +245,7 @@ func TestLoadConfigFile(t *testing.T) {
 				PGP:       "bar",
 				GCPKMS:    "baz",
 				VaultURI:  "http://127.0.1.1/v1/baz/keys/baz",
+				YandexKMS: "qux",
 			},
 		},
 	}
@@ -257,6 +272,7 @@ func TestLoadConfigFileWithGroups(t *testing.T) {
 						PGP:     []string{"bar"},
 						GCPKMS:  []gcpKmsKey{{ResourceID: "foo"}},
 						AzureKV: []azureKVKey{{VaultURL: "https://foo.vault.azure.net", Key: "foo-key", Version: "fooversion"}},
+						YandexKMS: []yandexKmsKey{{KeyID: "foo"}},
 						Vault:   []string{"https://foo.vault:8200/v1/foo/keys/foo-key"},
 					},
 					{
@@ -267,6 +283,10 @@ func TestLoadConfigFileWithGroups(t *testing.T) {
 							{ResourceID: "baz"},
 						},
 						AzureKV: []azureKVKey{{VaultURL: "https://bar.vault.azure.net", Key: "bar-key", Version: "barversion"}},
+						YandexKMS: []yandexKmsKey{
+							{KeyID: "bar"},
+							{KeyID: "baz"},
+						},
 						Vault:   []string{"https://baz.vault:8200/v1/baz/keys/baz-key"},
 					},
 				},

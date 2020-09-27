@@ -14,6 +14,7 @@ import (
 	"go.mozilla.org/sops/v3/keys"
 	"go.mozilla.org/sops/v3/kms"
 	"go.mozilla.org/sops/v3/pgp"
+	"go.mozilla.org/sops/v3/yandexkms"
 )
 
 // KeyFromMasterKey converts a SOPS internal MasterKey to an RPC Key that can be serialized with Protocol Buffers
@@ -32,6 +33,14 @@ func KeyFromMasterKey(mk keys.MasterKey) Key {
 			KeyType: &Key_GcpKmsKey{
 				GcpKmsKey: &GcpKmsKey{
 					ResourceId: mk.ResourceID,
+				},
+			},
+		}
+	case *yandexkms.MasterKey:
+		return Key{
+			KeyType: &Key_YandexKmsKey{
+				YandexKmsKey: &YandexKmsKey{
+					KeyId: mk.KeyId,
 				},
 			},
 		}

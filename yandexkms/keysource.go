@@ -3,6 +3,7 @@ package yandexkms
 import (
 	"time"
 	"context"
+	"strings"
 
 	"go.mozilla.org/sops/v3/logging"
 	"github.com/sirupsen/logrus"
@@ -26,6 +27,36 @@ type MasterKey struct {
 	EncryptedKey      string
 	CreationDate      time.Time
 	Token             string
+}
+
+// NewMasterKeyFromResourceID takes a Yandex KMS key ID string and returns a new MasterKey for that
+func NewMasterKeyFromKeyID(keyId string) *MasterKey {
+	k := &MasterKey{}
+	k.KeyId = keyId
+	k.CreationDate = time.Now().UTC()
+	return k
+}
+
+// MasterKeysFromResourceIDString takes a comma separated list of Yandex KMS key IDs and returns a slice of new MasterKeys for them
+func MasterKeysFromKeyIDString(keyId string) []*MasterKey {
+	var keys []*MasterKey
+	if keyId == "" {
+		return keys
+	}
+	for _, s := range strings.Split(keyId, ",") {
+		keys = append(keys, NewMasterKeyFromKeyID(s))
+	}
+	return keys
+}
+
+// EncryptedDataKey returns the encrypted data key this master key holds
+func (key *MasterKey) EncryptedDataKey() []byte {
+	return []byte(key.EncryptedKey)
+}
+
+// SetEncryptedDataKey sets the encrypted data key for this master key
+func (key *MasterKey) SetEncryptedDataKey(enc []byte) {
+	key.EncryptedKey = string(enc)
 }
 
 // Encrypt takes a sops data key, encrypts it with KMS and stores the result in the EncryptedKey field
@@ -122,5 +153,6 @@ func (key MasterKey) createSession(ctx context.Context) (*ycsdk.SDK, error) {
 
 // derive an AAD context, see: https://cloud.yandex.com/docs/kms/concepts/encryption#add-context
 func (key MasterKey) aadContext() ([]byte) {
-	return []byte(key.CreationDate.UTC().Format(time.RFC3339))
+	//return []byte(key.CreationDate.UTC().Format(time.RFC3339))
+	return []byte("TODO")
 }

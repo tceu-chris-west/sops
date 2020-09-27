@@ -21,6 +21,7 @@ import (
 	"go.mozilla.org/sops/v3/hcvault"
 	"go.mozilla.org/sops/v3/kms"
 	"go.mozilla.org/sops/v3/pgp"
+	"go.mozilla.org/sops/v3/yandexkms"
 )
 
 // SopsFile is a struct used by the stores as a helper to unmarshal the SOPS metadata
@@ -42,6 +43,7 @@ type Metadata struct {
 	KMSKeys                   []kmskey    `yaml:"kms" json:"kms"`
 	GCPKMSKeys                []gcpkmskey `yaml:"gcp_kms" json:"gcp_kms"`
 	AzureKeyVaultKeys         []azkvkey   `yaml:"azure_kv" json:"azure_kv"`
+	YandexKMSKeys             []yandexkmskey `yaml:"yandex_kms" json:"yandex_kms"`
 	VaultKeys                 []vaultkey  `yaml:"hc_vault" json:"hc_vault"`
 	AgeKeys                   []agekey    `yaml:"age" json:"age"`
 	LastModified              string      `yaml:"lastmodified" json:"lastmodified"`
@@ -59,6 +61,7 @@ type keygroup struct {
 	KMSKeys           []kmskey    `yaml:"kms,omitempty" json:"kms,omitempty"`
 	GCPKMSKeys        []gcpkmskey `yaml:"gcp_kms,omitempty" json:"gcp_kms,omitempty"`
 	AzureKeyVaultKeys []azkvkey   `yaml:"azure_kv,omitempty" json:"azure_kv,omitempty"`
+	YandexKMSKeys     []yandexkmskey `yaml:"yandex_kms,omitempty" json:"yandex_kms,omitempty"`
 	VaultKeys         []vaultkey  `yaml:"hc_vault" json:"hc_vault"`
 	AgeKeys           []agekey    `yaml:"age" json:"age"`
 }
@@ -100,6 +103,12 @@ type azkvkey struct {
 	EncryptedDataKey string `yaml:"enc" json:"enc"`
 }
 
+type yandexkmskey struct {
+	KeyID            string `yaml:"key_id" json:"key_id"`
+	CreatedAt        string `yaml:"created_at" json:"created_at"`
+	EncryptedDataKey string `yaml:"enc" json:"enc"`
+}
+
 type agekey struct {
 	Recipient        string `yaml:"recipient" json:"recipient"`
 	EncryptedDataKey string `yaml:"enc" json:"enc"`
@@ -123,6 +132,7 @@ func MetadataFromInternal(sopsMetadata sops.Metadata) Metadata {
 		m.GCPKMSKeys = gcpkmsKeysFromGroup(group)
 		m.VaultKeys = vaultKeysFromGroup(group)
 		m.AzureKeyVaultKeys = azkvKeysFromGroup(group)
+		m.YandexKMSKeys = yandexkmsKeysFromGroup(group)
 		m.AgeKeys = ageKeysFromGroup(group)
 	} else {
 		for _, group := range sopsMetadata.KeyGroups {
@@ -132,6 +142,7 @@ func MetadataFromInternal(sopsMetadata sops.Metadata) Metadata {
 				GCPKMSKeys:        gcpkmsKeysFromGroup(group),
 				VaultKeys:         vaultKeysFromGroup(group),
 				AzureKeyVaultKeys: azkvKeysFromGroup(group),
+				YandexKMSKeys:     yandexkmsKeysFromGroup(group),
 				AgeKeys:           ageKeysFromGroup(group),
 			})
 		}
@@ -216,6 +227,20 @@ func azkvKeysFromGroup(group sops.KeyGroup) (keys []azkvkey) {
 	return
 }
 
+func yandexkmsKeysFromGroup(group sops.KeyGroup) (keys []yandexkmskey) {
+	for _, key := range group {
+		switch key := key.(type) {
+		case *yandexkms.MasterKey:
+			keys = append(keys, yandexkmskey{
+				KeyID:            key.KeyID,
+				CreatedAt:        key.CreationDate.Format(time.RFC3339),
+				EncryptedDataKey: key.EncryptedKey,
+			})
+		}
+	}
+	return
+}
+
 func ageKeysFromGroup(group sops.KeyGroup) (keys []agekey) {
 	for _, key := range group {
 		switch key := key.(type) {
@@ -274,7 +299,7 @@ func (m *Metadata) ToInternal() (sops.Metadata, error) {
 	}, nil
 }
 
-func internalGroupFrom(kmsKeys []kmskey, pgpKeys []pgpkey, gcpKmsKeys []gcpkmskey, azkvKeys []azkvkey, vaultKeys []vaultkey, ageKeys []agekey) (sops.KeyGroup, error) {
+func internalGroupFrom(kmsKeys []kmskey, pgpKeys []pgpkey, gcpKmsKeys []gcpkmskey, azkvKeys []azkvkey, yandexKmsKeys []yandexkmskey, vaultKeys []vaultkey, ageKeys []agekey) (sops.KeyGroup, error) {
 	var internalGroup sops.KeyGroup
 	for _, kmsKey := range kmsKeys {
 		k, err := kmsKey.toInternal()
@@ -304,6 +329,13 @@ func internalGroupFrom(kmsKeys []kmskey, pgpKeys []pgpkey, gcpKmsKeys []gcpkmske
 		}
 		internalGroup = append(internalGroup, k)
 	}
+	for _, yandexKmsKey := range yandexKmsKeys {
+		k, err := yandexKmsKey.toInternal()
+		if err != nil {
+			return nil, err
+		}
+		internalGroup = append(internalGroup, k)
+	}
 	for _, pgpKey := range pgpKeys {
 		k, err := pgpKey.toInternal()
 		if err != nil {
@@ -323,8 +355,8 @@ func internalGroupFrom(kmsKeys []kmskey, pgpKeys []pgpkey, gcpKmsKeys []gcpkmske
 
 func (m *Metadata) internalKeygroups() ([]sops.KeyGroup, error) {
 	var internalGroups []sops.KeyGroup
-	if len(m.PGPKeys) > 0 || len(m.KMSKeys) > 0 || len(m.GCPKMSKeys) > 0 || len(m.AzureKeyVaultKeys) > 0 || len(m.VaultKeys) > 0 || len(m.AgeKeys) > 0 {
-		internalGroup, err := internalGroupFrom(m.KMSKeys, m.PGPKeys, m.GCPKMSKeys, m.AzureKeyVaultKeys, m.VaultKeys, m.AgeKeys)
+	if len(m.PGPKeys) > 0 || len(m.KMSKeys) > 0 || len(m.GCPKMSKeys) > 0 || len(m.AzureKeyVaultKeys) > 0 || len(m.YandexKMSKeys) > 0 || len(m.VaultKeys) > 0 || len(m.AgeKeys) > 0 {
+		internalGroup, err := internalGroupFrom(m.KMSKeys, m.PGPKeys, m.GCPKMSKeys, m.AzureKeyVaultKeys, m.YandexKMSKeys, m.VaultKeys, m.AgeKeys)
 		if err != nil {
 			return nil, err
 		}
@@ -332,7 +364,7 @@ func (m *Metadata) internalKeygroups() ([]sops.KeyGroup, error) {
 		return internalGroups, nil
 	} else if len(m.KeyGroups) > 0 {
 		for _, group := range m.KeyGroups {
-			internalGroup, err := internalGroupFrom(group.KMSKeys, group.PGPKeys, group.GCPKMSKeys, group.AzureKeyVaultKeys, group.VaultKeys, group.AgeKeys)
+			internalGroup, err := internalGroupFrom(group.KMSKeys, group.PGPKeys, group.GCPKMSKeys, group.AzureKeyVaultKeys, group.YandexKMSKeys, group.VaultKeys, group.AgeKeys)
 			if err != nil {
 				return nil, err
 			}
@@ -381,6 +413,18 @@ func (azkvKey *azkvkey) toInternal() (*azkv.MasterKey, error) {
 		Name:         azkvKey.Name,
 		Version:      azkvKey.Version,
 		EncryptedKey: azkvKey.EncryptedDataKey,
+		CreationDate: creationDate,
+	}, nil
+}
+
+func (yandexKmsKey *yandexkmskey) toInternal() (*yandexkms.MasterKey, error) {
+	creationDate, err := time.Parse(time.RFC3339, yandexKmsKey.CreatedAt)
+	if err != nil {
+		return nil, err
+	}
+	return &yandexkms.MasterKey{
+		KeyID:        yandexKmsKey.KeyID,
+		EncryptedKey: yandexKmsKey.EncryptedDataKey,
 		CreationDate: creationDate,
 	}, nil
 }

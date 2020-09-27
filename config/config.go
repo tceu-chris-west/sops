@@ -21,6 +21,7 @@ import (
 	"go.mozilla.org/sops/v3/logging"
 	"go.mozilla.org/sops/v3/pgp"
 	"go.mozilla.org/sops/v3/publish"
+	"go.mozilla.org/sops/v3/yandexkms"
 )
 
 var log *logrus.Logger
@@ -72,6 +73,7 @@ type keyGroup struct {
 	GCPKMS  []gcpKmsKey  `yaml:"gcp_kms"`
 	AzureKV []azureKVKey `yaml:"azure_keyvault"`
 	Vault   []string     `yaml:"hc_vault"`
+        YandexKMS []yandexKmsKey `yaml:"yandex_kms"`
 	Age     []string     `yaml:"age"`
 	PGP     []string
 }
@@ -91,6 +93,10 @@ type azureKVKey struct {
 	VaultURL string `yaml:"vaultUrl"`
 	Key      string `yaml:"key"`
 	Version  string `yaml:"version"`
+}
+
+type yandexKmsKey struct {
+	KeyID string `yaml:"key_id"`
 }
 
 type destinationRule struct {
@@ -115,6 +121,7 @@ type creationRule struct {
 	PGP               string
 	GCPKMS            string     `yaml:"gcp_kms"`
 	AzureKeyVault     string     `yaml:"azure_keyvault"`
+	YandexKMS         string     `yaml:"yandex_kms"`
 	VaultURI          string     `yaml:"hc_vault_transit_uri"`
 	KeyGroups         []keyGroup `yaml:"key_groups"`
 	ShamirThreshold   int        `yaml:"shamir_threshold"`
@@ -169,6 +176,9 @@ func getKeyGroupsFromCreationRule(cRule *creationRule, kmsEncryptionContext map[
 			for _, k := range group.AzureKV {
 				keyGroup = append(keyGroup, azkv.NewMasterKey(k.VaultURL, k.Key, k.Version))
 			}
+			for _, k := range group.YandexKMS {
+				keyGroup = append(keyGroup, yandexkms.NewMasterKeyFromKeyID(k.KeyID))
+			}
 			for _, k := range group.Vault {
 				if masterKey, err := hcvault.NewMasterKeyFromURI(k); err == nil {
 					keyGroup = append(keyGroup, masterKey)
@@ -197,6 +207,9 @@ func getKeyGroupsFromCreationRule(cRule *creationRule, kmsEncryptionContext map[
 			keyGroup = append(keyGroup, k)
 		}
 		for _, k := range gcpkms.MasterKeysFromResourceIDString(cRule.GCPKMS) {
+			keyGroup = append(keyGroup, k)
+		}
+		for _, k := range yandexkms.MasterKeysFromKeyIDString(cRule.YandexKMS) {
 			keyGroup = append(keyGroup, k)
 		}
 		azureKeys, err := azkv.MasterKeysFromURLs(cRule.AzureKeyVault)

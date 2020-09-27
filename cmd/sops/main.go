@@ -37,6 +37,7 @@ import (
 	"go.mozilla.org/sops/v3/stores/dotenv"
 	"go.mozilla.org/sops/v3/stores/json"
 	"go.mozilla.org/sops/v3/version"
+	"go.mozilla.org/sops/v3/yandexkms"
 	"google.golang.org/grpc"
 	"gopkg.in/urfave/cli.v1"
 )
@@ -382,6 +383,10 @@ func main() {
 							Usage: "the full vault path to the key used to encrypt/decrypt. Make you choose and configure a key with encrption/decryption enabled (e.g. 'https://vault.example.org:8200/v1/transit/keys/dev'). Can be specified more than once",
 						},
 						cli.StringSliceFlag{
+							Name:  "yandex-kms",
+							Usage: "the key id of a Yandex KMS key. Can be specified more than once",
+						},
+						cli.StringSliceFlag{
 							Name:  "age",
 							Usage: "the age recipient the new group should contain. Can be specified more than once",
 						},
@@ -404,6 +409,7 @@ func main() {
 						gcpKmses := c.StringSlice("gcp-kms")
 						vaultURIs := c.StringSlice("hc-vault-transit")
 						azkvs := c.StringSlice("azure-kv")
+						yandexKmses := c.StringSlice("yandex-kms")
 						ageRecipients := c.StringSlice("age")
 						var group sops.KeyGroup
 						for _, fp := range pgpFps {
@@ -414,6 +420,9 @@ func main() {
 						}
 						for _, kms := range gcpKmses {
 							group = append(group, gcpkms.NewMasterKeyFromResourceID(kms))
+						}
+						for _, kms := range yandexKmses {
+							group = append(group, yandexkms.NewMasterKeyFromKeyID(kms))
 						}
 						for _, uri := range vaultURIs {
 							k, err := hcvault.NewMasterKeyFromURI(uri)
@@ -565,6 +574,11 @@ func main() {
 			EnvVar: "SOPS_VAULT_URIS",
 		},
 		cli.StringFlag{
+			Name:   "yandex-kms",
+			Usage:  "comma separated list of Yandex KMS key IDs",
+			EnvVar: "SOPS_YANDEX_KMS_IDS",
+		},
+		cli.StringFlag{
 			Name:   "pgp, p",
 			Usage:  "comma separated list of PGP fingerprints",
 			EnvVar: "SOPS_PGP_FP",
@@ -625,6 +639,14 @@ func main() {
 		cli.StringFlag{
 			Name:  "rm-hc-vault-transit",
 			Usage: "remove the provided comma-separated list of Vault's URI key from the list of master keys on the given file ( eg. https://vault.example.org:8200/v1/transit/keys/dev)",
+		},
+		cli.StringFlag{
+			Name:  "add-yandex-kms",
+			Usage: "add the provided comma-separated list of Yandex KMS key IDs to the list of master keys on the given file",
+		},
+		cli.StringFlag{
+			Name:  "rm-yandex-kms",
+			Usage: "remove the provided comma-separated list of Yandex KMS key IDs from the list of master keys on the given file",
 		},
 		cli.StringFlag{
 			Name:  "add-age",
@@ -703,8 +725,8 @@ func main() {
 			return toExitError(err)
 		}
 		if _, err := os.Stat(fileName); os.IsNotExist(err) {
-			if c.String("add-kms") != "" || c.String("add-pgp") != "" || c.String("add-gcp-kms") != "" || c.String("add-hc-vault-transit") != "" || c.String("add-azure-kv") != "" || c.String("add-age") != "" ||
-				c.String("rm-kms") != "" || c.String("rm-pgp") != "" || c.String("rm-gcp-kms") != "" || c.String("rm-hc-vault-transit") != "" || c.String("rm-azure-kv") != "" || c.String("rm-age") != "" {
+			if c.String("add-kms") != "" || c.String("add-pgp") != "" || c.String("add-gcp-kms") != "" || c.String("add-hc-vault-transit") != "" || c.String("add-azure-kv") != "" || c.String("add-yandex-kms") != "" || c.String("add-age") != "" ||
+				c.String("rm-kms") != "" || c.String("rm-pgp") != "" || c.String("rm-gcp-kms") != "" || c.String("rm-hc-vault-transit") != "" || c.String("rm-azure-kv") != "" || c.String("rm-yandex-kms") != "" || c.String("rm-age") != "" {
 				return common.NewExitError("Error: cannot add or remove keys on non-existent files, use `--kms` and `--pgp` instead.", codes.CannotChangeKeysFromNonExistentFile)
 			}
 			if c.Bool("encrypt") || c.Bool("decrypt") || c.Bool("rotate") {
@@ -818,6 +840,9 @@ func main() {
 			for _, k := range gcpkms.MasterKeysFromResourceIDString(c.String("add-gcp-kms")) {
 				addMasterKeys = append(addMasterKeys, k)
 			}
+			for _, k := range yandexkms.MasterKeysFromKeyIDString(c.String("add-yandex-kms")) {
+				addMasterKeys = append(addMasterKeys, k)
+			}
 			azureKeys, err := azkv.MasterKeysFromURLs(c.String("add-azure-kv"))
 			if err != nil {
 				return err
@@ -848,6 +873,9 @@ func main() {
 				rmMasterKeys = append(rmMasterKeys, k)
 			}
 			for _, k := range gcpkms.MasterKeysFromResourceIDString(c.String("rm-gcp-kms")) {
+				rmMasterKeys = append(rmMasterKeys, k)
+			}
+			for _, k := range yandexkms.MasterKeysFromKeyIDString(c.String("rm-yandex-kms")) {
 				rmMasterKeys = append(rmMasterKeys, k)
 			}
 			azureKeys, err = azkv.MasterKeysFromURLs(c.String("rm-azure-kv"))
@@ -1067,6 +1095,7 @@ func keyGroups(c *cli.Context, file string) ([]sops.KeyGroup, error) {
 	var cloudKmsKeys []keys.MasterKey
 	var azkvKeys []keys.MasterKey
 	var hcVaultMkKeys []keys.MasterKey
+	var yandexKmsKeys []keys.MasterKey
 	var ageMasterKeys []keys.MasterKey
 	kmsEncryptionContext := kms.ParseKMSContext(c.String("encryption-context"))
 	if c.String("encryption-context") != "" && kmsEncryptionContext == nil {
@@ -1080,6 +1109,11 @@ func keyGroups(c *cli.Context, file string) ([]sops.KeyGroup, error) {
 	if c.String("gcp-kms") != "" {
 		for _, k := range gcpkms.MasterKeysFromResourceIDString(c.String("gcp-kms")) {
 			cloudKmsKeys = append(cloudKmsKeys, k)
+		}
+	}
+	if c.String("yandex-kms") != "" {
+		for _, k := range yandexkms.MasterKeysFromKeyIDString(c.String("yandex-kms")) {
+			yandexKmsKeys = append(yandexKmsKeys, k)
 		}
 	}
 	if c.String("azure-kv") != "" {
@@ -1114,7 +1148,7 @@ func keyGroups(c *cli.Context, file string) ([]sops.KeyGroup, error) {
 			ageMasterKeys = append(ageMasterKeys, k)
 		}
 	}
-	if c.String("kms") == "" && c.String("pgp") == "" && c.String("gcp-kms") == "" && c.String("azure-kv") == "" && c.String("hc-vault-transit") == "" && c.String("age") == "" {
+	if c.String("kms") == "" && c.String("pgp") == "" && c.String("gcp-kms") == "" && c.String("azure-kv") == "" && c.String("hc-vault-transit") == "" && c.String("yandex-kms") == "" && c.String("age") == "" {
 		conf, err := loadConfig(c, file, kmsEncryptionContext)
 		// config file might just not be supplied, without any error
 		if conf == nil {
@@ -1132,6 +1166,7 @@ func keyGroups(c *cli.Context, file string) ([]sops.KeyGroup, error) {
 	group = append(group, azkvKeys...)
 	group = append(group, pgpKeys...)
 	group = append(group, hcVaultMkKeys...)
+	group = append(group, yandexKmsKeys...)
 	group = append(group, ageMasterKeys...)
 	log.Debugf("Master keys available:  %+v", group)
 	return []sops.KeyGroup{group}, nil
