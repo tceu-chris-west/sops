@@ -289,7 +289,7 @@ func encodeMetadataItem(prefix string, kind reflect.Kind, field reflect.Value) (
 		}
 	case reflect.Int:
 		if field.Int() != 0 {
-			result[prefix] = string(field.Int())
+			result[prefix] = string(rune(field.Int()))
 		}
 	case reflect.String:
 		if field.String() != "" {
