@@ -104,7 +104,7 @@ type azkvkey struct {
 }
 
 type yandexkmskey struct {
-	KeyID            string `yaml:"key_id" json:"key_id"`
+	KeyId            string `yaml:"key_id" json:"key_id"`
 	CreatedAt        string `yaml:"created_at" json:"created_at"`
 	EncryptedDataKey string `yaml:"enc" json:"enc"`
 }
@@ -232,7 +232,7 @@ func yandexkmsKeysFromGroup(group sops.KeyGroup) (keys []yandexkmskey) {
 		switch key := key.(type) {
 		case *yandexkms.MasterKey:
 			keys = append(keys, yandexkmskey{
-				KeyID:            key.KeyID,
+				KeyId:            key.KeyId,
 				CreatedAt:        key.CreationDate.Format(time.RFC3339),
 				EncryptedDataKey: key.EncryptedKey,
 			})
@@ -423,7 +423,7 @@ func (yandexKmsKey *yandexkmskey) toInternal() (*yandexkms.MasterKey, error) {
 		return nil, err
 	}
 	return &yandexkms.MasterKey{
-		KeyID:        yandexKmsKey.KeyID,
+		KeyId:        yandexKmsKey.KeyId,
 		EncryptedKey: yandexKmsKey.EncryptedDataKey,
 		CreationDate: creationDate,
 	}, nil
