@@ -96,7 +96,8 @@ type azureKVKey struct {
 }
 
 type yandexKmsKey struct {
-	KeyID string `yaml:"key_id"`
+	KeyID     string `yaml:"key_id"`
+	SAKeyFile string `yaml:"sa_key_file"`
 }
 
 type destinationRule struct {
@@ -122,6 +123,7 @@ type creationRule struct {
 	GCPKMS            string     `yaml:"gcp_kms"`
 	AzureKeyVault     string     `yaml:"azure_keyvault"`
 	YandexKMS         string     `yaml:"yandex_kms"`
+	YandexSAKeyFile   string     `yaml:"yandex_sa_key_file"`
 	VaultURI          string     `yaml:"hc_vault_transit_uri"`
 	KeyGroups         []keyGroup `yaml:"key_groups"`
 	ShamirThreshold   int        `yaml:"shamir_threshold"`
@@ -177,7 +179,7 @@ func getKeyGroupsFromCreationRule(cRule *creationRule, kmsEncryptionContext map[
 				keyGroup = append(keyGroup, azkv.NewMasterKey(k.VaultURL, k.Key, k.Version))
 			}
 			for _, k := range group.YandexKMS {
-				keyGroup = append(keyGroup, yandexkms.NewMasterKeyFromKeyID(k.KeyID))
+				keyGroup = append(keyGroup, yandexkms.NewMasterKeyFromKeyID(k.KeyID, k.SAKeyFile))
 			}
 			for _, k := range group.Vault {
 				if masterKey, err := hcvault.NewMasterKeyFromURI(k); err == nil {
@@ -209,7 +211,7 @@ func getKeyGroupsFromCreationRule(cRule *creationRule, kmsEncryptionContext map[
 		for _, k := range gcpkms.MasterKeysFromResourceIDString(cRule.GCPKMS) {
 			keyGroup = append(keyGroup, k)
 		}
-		for _, k := range yandexkms.MasterKeysFromKeyIDString(cRule.YandexKMS) {
+		for _, k := range yandexkms.MasterKeysFromKeyIDString(cRule.YandexKMS, cRule.YandexSAKeyFile) {
 			keyGroup = append(keyGroup, k)
 		}
 		azureKeys, err := azkv.MasterKeysFromURLs(cRule.AzureKeyVault)

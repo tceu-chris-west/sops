@@ -105,6 +105,7 @@ type azkvkey struct {
 
 type yandexkmskey struct {
 	KeyId            string `yaml:"key_id" json:"key_id"`
+	SAKeyFile        string `yaml:"sa_key_file" json:"sa_key_file"`
 	CreatedAt        string `yaml:"created_at" json:"created_at"`
 	EncryptedDataKey string `yaml:"enc" json:"enc"`
 }
@@ -234,6 +235,7 @@ func yandexkmsKeysFromGroup(group sops.KeyGroup) (keys []yandexkmskey) {
 			keys = append(keys, yandexkmskey{
 				KeyId:            key.KeyId,
 				CreatedAt:        key.CreationDate.Format(time.RFC3339),
+				SAKeyFile:        key.SAKeyFile,
 				EncryptedDataKey: key.EncryptedKey,
 			})
 		}
@@ -425,6 +427,7 @@ func (yandexKmsKey *yandexkmskey) toInternal() (*yandexkms.MasterKey, error) {
 	return &yandexkms.MasterKey{
 		KeyId:        yandexKmsKey.KeyId,
 		EncryptedKey: yandexKmsKey.EncryptedDataKey,
+		SAKeyFile:    yandexKmsKey.SAKeyFile,
 		CreationDate: creationDate,
 	}, nil
 }

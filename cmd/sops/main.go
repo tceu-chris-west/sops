@@ -387,6 +387,10 @@ func main() {
 							Usage: "the key id of a Yandex KMS key. Can be specified more than once",
 						},
 						cli.StringSliceFlag{
+							Name:  "yandex-sa-key",
+							Usage: "the file path of a Yandex service account JSON key file",
+						},
+						cli.StringSliceFlag{
 							Name:  "age",
 							Usage: "the age recipient the new group should contain. Can be specified more than once",
 						},
@@ -422,7 +426,7 @@ func main() {
 							group = append(group, gcpkms.NewMasterKeyFromResourceID(kms))
 						}
 						for _, kms := range yandexKmses {
-							group = append(group, yandexkms.NewMasterKeyFromKeyID(kms))
+							group = append(group, yandexkms.NewMasterKeyFromKeyID(kms, c.String("yandex-sa-key")))
 						}
 						for _, uri := range vaultURIs {
 							k, err := hcvault.NewMasterKeyFromURI(uri)
@@ -577,6 +581,11 @@ func main() {
 			Name:   "yandex-kms",
 			Usage:  "comma separated list of Yandex KMS key IDs",
 			EnvVar: "SOPS_YANDEX_KMS_IDS",
+		},
+		cli.StringFlag{
+			Name:   "yandex-sa-key",
+			Usage:  "path to Yandex service account key file",
+			EnvVar: "SOPS_YANDEX_SA_KEY",
 		},
 		cli.StringFlag{
 			Name:   "pgp, p",
@@ -840,7 +849,7 @@ func main() {
 			for _, k := range gcpkms.MasterKeysFromResourceIDString(c.String("add-gcp-kms")) {
 				addMasterKeys = append(addMasterKeys, k)
 			}
-			for _, k := range yandexkms.MasterKeysFromKeyIDString(c.String("add-yandex-kms")) {
+			for _, k := range yandexkms.MasterKeysFromKeyIDString(c.String("add-yandex-kms"), c.String("yandex-sa-key")) {
 				addMasterKeys = append(addMasterKeys, k)
 			}
 			azureKeys, err := azkv.MasterKeysFromURLs(c.String("add-azure-kv"))
@@ -875,7 +884,7 @@ func main() {
 			for _, k := range gcpkms.MasterKeysFromResourceIDString(c.String("rm-gcp-kms")) {
 				rmMasterKeys = append(rmMasterKeys, k)
 			}
-			for _, k := range yandexkms.MasterKeysFromKeyIDString(c.String("rm-yandex-kms")) {
+			for _, k := range yandexkms.MasterKeysFromKeyIDString(c.String("rm-yandex-kms"), c.String("yandex-sa-key")) {
 				rmMasterKeys = append(rmMasterKeys, k)
 			}
 			azureKeys, err = azkv.MasterKeysFromURLs(c.String("rm-azure-kv"))
@@ -1112,7 +1121,7 @@ func keyGroups(c *cli.Context, file string) ([]sops.KeyGroup, error) {
 		}
 	}
 	if c.String("yandex-kms") != "" {
-		for _, k := range yandexkms.MasterKeysFromKeyIDString(c.String("yandex-kms")) {
+		for _, k := range yandexkms.MasterKeysFromKeyIDString(c.String("yandex-kms"), c.String("yandex-sa-key")) {
 			yandexKmsKeys = append(yandexKmsKeys, k)
 		}
 	}

@@ -45,6 +45,7 @@ message AgeKey {
 
 message YandexKmsKey {
 	string key_id = 1;
+	string sa_key_file = 2;
 }
 
 message EncryptRequest {

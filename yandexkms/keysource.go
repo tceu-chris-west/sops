@@ -8,6 +8,7 @@ import (
 	"go.mozilla.org/sops/v3/logging"
 	"github.com/sirupsen/logrus"
 	"github.com/yandex-cloud/go-genproto/yandex/cloud/kms/v1"
+	"github.com/yandex-cloud/go-sdk/iamkey"
 	ycsdk "github.com/yandex-cloud/go-sdk"
 )
 
@@ -17,34 +18,34 @@ func init() {
 	log = logging.NewLogger("YANDEXKMS")
 }
 
-// Borrowing from the AWS KMS keysource
-var kmsSvc ycsdk.SDK
-var isMocked bool
-
 // MasterKey is a Yandex KMS key used to encrypt and decrypt sops' data key.
 type MasterKey struct {
 	KeyId             string
 	EncryptedKey      string
 	CreationDate      time.Time
+	SAKeyFile         string
 	Token             string
 }
 
 // NewMasterKeyFromResourceID takes a Yandex KMS key ID string and returns a new MasterKey for that
-func NewMasterKeyFromKeyID(keyId string) *MasterKey {
+func NewMasterKeyFromKeyID(keyId string, saKeyFile string) *MasterKey {
+	log.WithField("key_id", keyId).WithField("sa", saKeyFile).Debug("nmkfkid(...)")
 	k := &MasterKey{}
 	k.KeyId = keyId
+	k.SAKeyFile = saKeyFile
 	k.CreationDate = time.Now().UTC()
 	return k
 }
 
 // MasterKeysFromResourceIDString takes a comma separated list of Yandex KMS key IDs and returns a slice of new MasterKeys for them
-func MasterKeysFromKeyIDString(keyId string) []*MasterKey {
+func MasterKeysFromKeyIDString(keyId string, saKeyFile string) []*MasterKey {
+	log.WithField("key_ids", keyId).WithField("sa", saKeyFile).Debug("mkfkids(...)")
 	var keys []*MasterKey
 	if keyId == "" {
 		return keys
 	}
 	for _, s := range strings.Split(keyId, ",") {
-		keys = append(keys, NewMasterKeyFromKeyID(s))
+		keys = append(keys, NewMasterKeyFromKeyID(s, saKeyFile))
 	}
 	return keys
 }
@@ -57,6 +58,16 @@ func (key *MasterKey) EncryptedDataKey() []byte {
 // SetEncryptedDataKey sets the encrypted data key for this master key
 func (key *MasterKey) SetEncryptedDataKey(enc []byte) {
 	key.EncryptedKey = string(enc)
+}
+
+// SetSAKeyFile sets the location of a service account key file for auth with Yandex
+func (key *MasterKey) SetSAKeyFile(fpath string) {
+	key.SAKeyFile = fpath
+}
+
+// SetToken sets an OAuth token for auth with Yandex
+func (key *MasterKey) SetToken(token string) {
+	key.Token = token
 }
 
 // Encrypt takes a sops data key, encrypts it with KMS and stores the result in the EncryptedKey field
@@ -124,6 +135,7 @@ func (key MasterKey) ToMap() map[string]interface{} {
 	out["created_at"] = key.CreationDate.UTC().Format(time.RFC3339)
 	out["enc"] = key.EncryptedKey
 	out["key_id"] = key.KeyId
+	out["sa_key_file"] = key.SAKeyFile
 	// possibly not a good idea to put OAuth tokens in serialised data
 	return out
 }
@@ -131,13 +143,29 @@ func (key MasterKey) ToMap() map[string]interface{} {
 // authenticate with Yandex
 func (key MasterKey) createSession(ctx context.Context) (*ycsdk.SDK, error) {
 	var credentials ycsdk.Credentials
+	log.WithField("key_id", key.KeyId).WithField("sa_key_file", key.SAKeyFile).Debug("Authenticating with Yandex")
 
 	if key.Token != "" {
-		// if there's an OAuth token, use it
+		// first try for an oauth token
 		credentials = ycsdk.OAuthToken(key.Token)
+		log.WithField("key_id", key.KeyId).Info("Authenticating using token")
+
+	} else if key.SAKeyFile != "" {
+		// if there's a file containing service account keys, use it
+		authorizedKey, err := iamkey.ReadFromJSONFile(key.SAKeyFile)
+		if err != nil {
+			return nil, err
+		}
+		credentials, err = ycsdk.ServiceAccountKey(authorizedKey)
+		if err != nil {
+			return nil, err
+		}
+		log.WithField("key_id", key.KeyId).WithField("sa_key_file", key.SAKeyFile).Info("Authenticating using service account")
+
 	} else {
 		// else look for an instance service account
 		credentials = ycsdk.InstanceServiceAccount()
+		log.WithField("key_id", key.KeyId).Info("Authenticating using instance metadata")
 	}
 
 	sdk, err := ycsdk.Build(ctx, ycsdk.Config{

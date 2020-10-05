@@ -41,6 +41,7 @@ func KeyFromMasterKey(mk keys.MasterKey) Key {
 			KeyType: &Key_YandexKmsKey{
 				YandexKmsKey: &YandexKmsKey{
 					KeyId: mk.KeyId,
+					SaKeyFile: mk.SAKeyFile,
 				},
 			},
 		}
