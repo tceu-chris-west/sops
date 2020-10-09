@@ -181,6 +181,5 @@ func (key MasterKey) createSession(ctx context.Context) (*ycsdk.SDK, error) {
 
 // derive an AAD context, see: https://cloud.yandex.com/docs/kms/concepts/encryption#add-context
 func (key MasterKey) aadContext() ([]byte) {
-	//return []byte(key.CreationDate.UTC().Format(time.RFC3339))
-	return []byte("TODO")
+	return []byte(key.CreationDate.UTC().Format(time.RFC3339))
 }

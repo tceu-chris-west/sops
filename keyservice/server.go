@@ -67,6 +67,7 @@ func (ks *Server) encryptWithAzureKeyVault(key *AzureKeyVaultKey, plaintext []by
 func (ks *Server) encryptWithYandexKms(key *YandexKmsKey, plaintext []byte) ([]byte, error) {
 	yandexKmsKey := yandexkms.MasterKey{
 		KeyId: key.KeyId,
+		SAKeyFile: key.SaKeyFile,
 	}
 	err := yandexKmsKey.Encrypt(plaintext)
 	if err != nil {
@@ -137,6 +138,7 @@ func (ks *Server) decryptWithAzureKeyVault(key *AzureKeyVaultKey, ciphertext []b
 func (ks *Server) decryptWithYandexKms(key *YandexKmsKey, ciphertext []byte) ([]byte, error) {
 	yandexKmsKey := yandexkms.MasterKey{
 		KeyId: key.KeyId,
+		SAKeyFile: key.SaKeyFile,
 	}
 	yandexKmsKey.EncryptedKey = string(ciphertext)
 	plaintext, err := yandexKmsKey.Decrypt()
@@ -308,6 +310,14 @@ func (ks Server) Decrypt(ctx context.Context,
 		}
 	case *Key_AzureKeyvaultKey:
 		plaintext, err := ks.decryptWithAzureKeyVault(k.AzureKeyvaultKey, req.Ciphertext)
+		if err != nil {
+			return nil, err
+		}
+		response = &DecryptResponse{
+			Plaintext: plaintext,
+		}
+	case *Key_YandexKmsKey:
+		plaintext, err := ks.decryptWithYandexKms(k.YandexKmsKey, req.Ciphertext)
 		if err != nil {
 			return nil, err
 		}
