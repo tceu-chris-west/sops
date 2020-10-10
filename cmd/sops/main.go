@@ -794,6 +794,12 @@ func main() {
 		outputStore := outputStore(c, fileName)
 		svcs := keyservices(c)
 
+		// when decrypting with Yandex we should have the option
+		// of overriding the service account key's path
+		if c.String("yandex-sa-key") != "" {
+			yandexkms.SetSAKeyFile(c.String("yandex-sa-key"))
+		}
+
 		var output []byte
 		if c.Bool("encrypt") {
 			var groups []sops.KeyGroup
@@ -827,6 +833,7 @@ func main() {
 			if err != nil {
 				return common.NewExitError(fmt.Errorf("error parsing --extract path: %s", err), codes.InvalidTreePathFormat)
 			}
+
 			output, err = decrypt(decryptOpts{
 				OutputStore: outputStore,
 				InputStore:  inputStore,

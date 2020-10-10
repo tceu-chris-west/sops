@@ -14,8 +14,12 @@ import (
 
 var log *logrus.Logger
 
+// this is user-dependent and should always trump what's found in the store (for example)
+var global_sa_key_file string
+
 func init() {
 	log = logging.NewLogger("YANDEXKMS")
+	global_sa_key_file = ""
 }
 
 // MasterKey is a Yandex KMS key used to encrypt and decrypt sops' data key.
@@ -25,6 +29,12 @@ type MasterKey struct {
 	CreationDate      time.Time
 	SAKeyFile         string
 	Token             string
+}
+
+// set the service account key file
+func SetSAKeyFile(saKeyFile string) {
+	global_sa_key_file = saKeyFile
+	log.WithField("sa", saKeyFile).Debug("ssakf(...)")
 }
 
 // NewMasterKeyFromResourceID takes a Yandex KMS key ID string and returns a new MasterKey for that
@@ -143,7 +153,13 @@ func (key MasterKey) ToMap() map[string]interface{} {
 // authenticate with Yandex
 func (key MasterKey) createSession(ctx context.Context) (*ycsdk.SDK, error) {
 	var credentials ycsdk.Credentials
-	log.WithField("key_id", key.KeyId).WithField("sa_key_file", key.SAKeyFile).Debug("Authenticating with Yandex")
+	var sa_key_file string
+	if global_sa_key_file == "" {
+		sa_key_file = key.SAKeyFile
+	} else {
+		sa_key_file = global_sa_key_file
+	}
+	log.WithField("key_id", key.KeyId).WithField("sa_key_file", sa_key_file).Debug("Authenticating with Yandex")
 
 	if key.Token != "" {
 		// first try for an oauth token
@@ -152,7 +168,7 @@ func (key MasterKey) createSession(ctx context.Context) (*ycsdk.SDK, error) {
 
 	} else if key.SAKeyFile != "" {
 		// if there's a file containing service account keys, use it
-		authorizedKey, err := iamkey.ReadFromJSONFile(key.SAKeyFile)
+		authorizedKey, err := iamkey.ReadFromJSONFile(sa_key_file)
 		if err != nil {
 			return nil, err
 		}
@@ -160,7 +176,7 @@ func (key MasterKey) createSession(ctx context.Context) (*ycsdk.SDK, error) {
 		if err != nil {
 			return nil, err
 		}
-		log.WithField("key_id", key.KeyId).WithField("sa_key_file", key.SAKeyFile).Info("Authenticating using service account")
+		log.WithField("key_id", key.KeyId).WithField("sa_key_file", sa_key_file).Info("Authenticating using service account")
 
 	} else {
 		// else look for an instance service account
