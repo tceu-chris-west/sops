@@ -166,7 +166,7 @@ func (key MasterKey) createSession(ctx context.Context) (*ycsdk.SDK, error) {
 		credentials = ycsdk.OAuthToken(key.Token)
 		log.WithField("key_id", key.KeyId).Info("Authenticating using token")
 
-	} else if key.SAKeyFile != "" {
+	} else if sa_key_file != "" {
 		// if there's a file containing service account keys, use it
 		authorizedKey, err := iamkey.ReadFromJSONFile(sa_key_file)
 		if err != nil {
