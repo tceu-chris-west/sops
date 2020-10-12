@@ -4,6 +4,7 @@ import (
 	"time"
 	"context"
 	"strings"
+	"os"
 
 	"go.mozilla.org/sops/v3/logging"
 	"github.com/sirupsen/logrus"
@@ -19,7 +20,9 @@ var global_sa_key_file string
 
 func init() {
 	log = logging.NewLogger("YANDEXKMS")
-	global_sa_key_file = ""
+	// if this included as a library, it still needs some means of retrieving
+	// the authentication details for Yandex
+	global_sa_key_file = os.Getenv("SOPS_YANDEX_SA_KEY")
 }
 
 // MasterKey is a Yandex KMS key used to encrypt and decrypt sops' data key.
