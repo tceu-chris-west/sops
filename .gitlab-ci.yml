@@ -31,7 +31,6 @@ compile:
   stage: build
   script:
     - make
-    - make install
   artifacts:
     paths:
-      - /go/bin/sops
+      - functional-tests/sops
