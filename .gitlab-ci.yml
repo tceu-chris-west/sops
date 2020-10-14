@@ -20,9 +20,6 @@ before_script:
   # shenanigans
   - mv hcvault/keysource_test.go /tmp
 
-after_script:
-  - mv /tmp/keysource_test.go hcvault/
-
 stages:
   - build
   - deploy
@@ -31,6 +28,8 @@ compile:
   stage: build
   script:
     - make
+    - cp functional-tests/sops sops
   artifacts:
+    name: "$CI_JOB_NAME-$CI_COMMIT_REF_SLUG"
     paths:
-      - functional-tests/sops
+      - sops
