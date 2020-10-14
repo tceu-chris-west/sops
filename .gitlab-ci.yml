@@ -15,7 +15,7 @@ before_script:
   - ln -svf $CI_PROJECT_DIR $GOPATH/src/$REPO_NAME
   - cd $GOPATH/src/$REPO_NAME
   # it needs rust/cargo, of course
-  - apt-get install -y cargo
+  - apt-get update && apt-get install -y cargo
   # move the vault tests out of the way to spare our blushes with d-in-d
   # shenanigans
   - mv hcvault/keysource_test.go /tmp
