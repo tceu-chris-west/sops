@@ -33,4 +33,4 @@ compile:
     - make
   artifacts:
     paths:
-      - sops
+      - $GOPATH/bin/sops
