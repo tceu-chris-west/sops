@@ -31,10 +31,6 @@ compile:
   stage: build
   script:
     - make
-
-install:
-  stage: deploy
-  script:
     - make install
   artifacts:
     paths:
