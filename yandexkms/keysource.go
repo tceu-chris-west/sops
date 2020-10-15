@@ -17,12 +17,14 @@ var log *logrus.Logger
 
 // this is user-dependent and should always trump what's found in the store (for example)
 var global_sa_key_file string
+var global_token string
 
 func init() {
 	log = logging.NewLogger("YANDEXKMS")
 	// if this included as a library, it still needs some means of retrieving
 	// the authentication details for Yandex
 	global_sa_key_file = os.Getenv("SOPS_YANDEX_SA_KEY")
+	global_token = os.Getenv("SOPS_YANDEX_TOKEN")
 }
 
 // MasterKey is a Yandex KMS key used to encrypt and decrypt sops' data key.
@@ -164,12 +166,7 @@ func (key MasterKey) createSession(ctx context.Context) (*ycsdk.SDK, error) {
 	}
 	log.WithField("key_id", key.KeyId).WithField("sa_key_file", sa_key_file).Debug("Authenticating with Yandex")
 
-	if key.Token != "" {
-		// first try for an oauth token
-		credentials = ycsdk.OAuthToken(key.Token)
-		log.WithField("key_id", key.KeyId).Info("Authenticating using token")
-
-	} else if sa_key_file != "" {
+	if sa_key_file != "" {
 		// if there's a file containing service account keys, use it
 		authorizedKey, err := iamkey.ReadFromJSONFile(sa_key_file)
 		if err != nil {
@@ -180,6 +177,11 @@ func (key MasterKey) createSession(ctx context.Context) (*ycsdk.SDK, error) {
 			return nil, err
 		}
 		log.WithField("key_id", key.KeyId).WithField("sa_key_file", sa_key_file).Info("Authenticating using service account")
+
+	} else if global_token != "" {
+		// if an oauth token is in the environment
+		credentials = ycsdk.OAuthToken(global_token)
+		log.WithField("key_id", key.KeyId).Info("Authenticating using token")
 
 	} else {
 		// else look for an instance service account
